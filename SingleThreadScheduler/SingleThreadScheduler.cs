@@ -15,6 +15,8 @@ namespace SingleThreadScheduler
         private BlockingCollection<Task> scheduledTasks = new BlockingCollection<Task>();
         private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
 
+        private object disposeLock = new object();
+
         public SingleThreadScheduler()
         {
             this.StartWork();
@@ -24,15 +26,28 @@ namespace SingleThreadScheduler
         {
             Task.Factory.StartNew(() =>
             {
-                for (; ; )
+                try
                 {
-                    if (scheduledTasks.IsAddingCompleted)
+                    lock (this.disposeLock)
                     {
-                        break;
-                    }
+                        for (; ; )
+                        {
+                            if (scheduledTasks.IsAddingCompleted
+                            || this.cancellationTokenSource.IsCancellationRequested)
+                            {
+                                break;
+                            }
 
-                    var task = scheduledTasks.Take(this.cancellationTokenSource.Token);
-                    base.TryExecuteTask(task);
+                            if (scheduledTasks.TryTake(out var task, Timeout.Infinite, this.cancellationTokenSource.Token))
+                            {
+                                base.TryExecuteTask(task);
+                            }
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Swallow this exception as it is excepted
                 }
             },
             this.cancellationTokenSource.Token,
@@ -60,8 +75,12 @@ namespace SingleThreadScheduler
         {
             scheduledTasks.CompleteAdding();
             cancellationTokenSource.Cancel();
-            //((IDisposable)this.cancellationTokenSource).Dispose();
-            //((IDisposable)this.scheduledTasks).Dispose();
+
+            lock (this.disposeLock)
+            {
+                ((IDisposable)this.cancellationTokenSource).Dispose();
+                ((IDisposable)this.scheduledTasks).Dispose(); 
+            }
         }
     }
 }

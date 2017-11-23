@@ -13,21 +13,13 @@ namespace SingleThreadScheduler
         {
             using (SingleThreadScheduler scheduler = new SingleThreadScheduler())
             {
-                var tasks = GenerateTaskBatch(scheduler);
-
-                scheduler.Dispose();
-
-                tasks = GenerateTaskBatch(scheduler);
-
-                Task.WaitAll(tasks);
-
-                tasks = GenerateTaskBatch(TaskScheduler.Default);
-
-                Task.WaitAll(tasks);
-
-                Console.WriteLine("Done. Press ENTER to exit.");
-                Console.ReadLine();
+                Task.WaitAll(GenerateTaskBatch(scheduler));
             }
+
+            Task.WaitAll(GenerateTaskBatch(TaskScheduler.Default));
+
+            Console.WriteLine("Done. Press ENTER to exit.");
+            Console.ReadLine();
         }
 
         private static Task[] GenerateTaskBatch(TaskScheduler scheduler)
@@ -40,25 +32,16 @@ namespace SingleThreadScheduler
             for (int i = 0; i < tasks.Length; i++)
             {
                 int actionNumber = i;
-                tasks[i] = RunTaskOnScheduler(() =>
+                tasks[i] = Task.Factory.StartNew(() =>
                 {
                     Console.WriteLine($"TID: {Thread.CurrentThread.ManagedThreadId}, Executing action {actionNumber + 1}");
-                }, 
+                },
+                CancellationToken.None,
+                TaskCreationOptions.DenyChildAttach,
                 scheduler);
             }
 
             return tasks;
-        }
-
-        private static Task RunTaskOnScheduler(Action action, TaskScheduler scheduler)
-        {
-            TaskFactory factory = new TaskFactory(
-                CancellationToken.None, 
-                TaskCreationOptions.DenyChildAttach,
-                TaskContinuationOptions.None, 
-                scheduler);
-
-            return factory.StartNew(action);
         }
     }
 }
