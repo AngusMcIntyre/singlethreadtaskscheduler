@@ -17,6 +17,8 @@ namespace SingleThreadScheduler
 
         private object disposeLock = new object();
 
+        public override int MaximumConcurrencyLevel => 1;
+
         public SingleThreadScheduler()
         {
             this.StartWork();
